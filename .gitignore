@@ -1,0 +1,19 @@
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# macOS
+.DS_Store
+
+# Data — raw inputs and all processed outputs are excluded from the repo.
+# Add your own input file to data/raw/ — only sample_input.csv is tracked.
+data/raw/*.xlsx
+data/raw/*.xls
+data/raw/*.csv
+!data/raw/sample_input.csv
+data/processed/
