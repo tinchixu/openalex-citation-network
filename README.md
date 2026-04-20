@@ -23,13 +23,13 @@ pip install openpyxl requests orjson
 ## Step 0 — Download the OpenAlex Snapshot
 
 OpenAlex distributes a full snapshot of ~200 million works via a public AWS S3 bucket.
-You only need the **works** entity (~600 GB compressed). Use an external drive.
+You only need the **works** entity (~1.2 TB compressed). Use an external drive.
 
 ```bash
 # Install AWS CLI if needed: https://aws.amazon.com/cli/
 # No AWS account required — the bucket is public
 
-aws s3 sync s3://openalex/data/works/ /your/local/path/works/ --no-sign-request
+aws s3 sync s3://openalex/data/works/ /path/to/openalex/data/works/ --no-sign-request
 ```
 
 Full snapshot documentation: https://docs.openalex.org/download-all-data/snapshot
@@ -52,6 +52,8 @@ Create a CSV or xlsx file with your papers. Place it in `data/raw/`.
 
 You need at least one of `doi` or (`title` + `year`) per paper. See `data/raw/sample_input.csv` for an example.
 
+> The sample list we originally ran this pipeline on is the **full publication history from Web of Science** of 11 journals: AER, QJE, JPE, the four AEJs (Applied, Policy, Macro, Micro), and JF, RFS, JFE, Journal of Econometrics. Any DOI/title list works — this is just what the benchmarks below refer to.
+
 Then set `INPUT_FILE` at the top of `pass1_match.py`:
 
 ```python
@@ -73,10 +75,7 @@ Scans the full snapshot once. Matches papers by **DOI first**, then **title + ye
 - Any title+year that maps to more than one paper is discarded as ambiguous
 
 **Output:** `data/processed/matched_works.jsonl`
-Each line: `{id, doi, title, year, match_method, referenced_works}`
-
-> **Benchmarked runtime:** 3h 37m for ~33K input papers against the full 600 GB snapshot
-> (6 workers, external spinning HDD). Reduce `N_WORKERS` to 2–3 for spinning HDDs; 6–8 for SSDs.
+Each line: `{id, doi, title, year, match_method, referenced_works}` — plus `input_doi` for title+year matches (the original DOI from your input, when present and different from OpenAlex's).
 
 ---
 
@@ -89,15 +88,13 @@ python3 pass2_citations.py
 Scans the snapshot a second time. For each work in OpenAlex, checks whether its `referenced_works` list contains any of your matched paper IDs.
 
 **Output:** `data/processed/citing_works.jsonl`
-Each line: `{id, doi, title, year, cites_our: [list of your paper IDs it cites]}`
-
-> **Benchmarked runtime:** 3h 37m (same machine as Step 2).
+Each line: `{id, doi, title, year, type, journal, issn_l, authors, institutions, cited_by_count, oa_status, cites_our}`
 
 ---
 
 ## Step 4 — Export metadata for a specific paper
 
-To get full metadata for all papers citing a single DOI, filtered to top journals:
+To get full metadata for all papers citing a single DOI:
 
 1. Set `TARGET_DOI` in `fetch_citing_metadata.py`
 2. Run:
@@ -106,13 +103,9 @@ To get full metadata for all papers citing a single DOI, filtered to top journal
 python3 fetch_citing_metadata.py
 ```
 
-Reads entirely from `citing_works.jsonl` — **no API calls, no internet connection needed**.
+Reads entirely from `citing_works.jsonl`
 
-**Output:** `data/processed/citing_{doi}.xlsx`
-- Sheet **"All"** — every citing paper with title, authors, institutions, journal, year, OA status, citation count
-- Sheet **"Top Journals"** — filtered to the journals defined in `TOP_JOURNALS`
-
-The default `TOP_JOURNALS` covers top economics and finance journals (AER, QJE, JPE, AEJ ×4, JF, RFS, JFE, Journal of Econometrics). Edit the dict at the top of the script to use your own list.
+**Output:** `data/processed/citing_{doi}.xlsx` — one sheet with every citing paper (title, authors, institutions, journal, year, OA status, citation count). Filter/sort in Excel as needed. The script also prints the top 20 citing journals to the console.
 
 ---
 
@@ -155,22 +148,15 @@ OpenAlex internally resolves all references to their Work IDs. Finding citations
 
 ## Performance
 
-Benchmarked on ~33K input papers against the full 600 GB OpenAlex snapshot:
+Benchmarked on ~33K input papers (full WoS history of the 11 journals listed above) against the full ~1.2 TB OpenAlex snapshot:
 
 | Step | Runtime | Output |
 |---|---|---|
-| Pass 1 — match papers | **3h 37m** | 35,110 matched (28,325 DOI + 6,785 title+year) |
-| Pass 2 — find citations | **3h 37m** | 1,839,886 citing papers with full metadata |
+| Pass 1 — match papers | **~3h 59m** | 35,110 matched (28,325 DOI + 6,785 title+year) |
+| Pass 2 — find citations | **~3h 36m** | 1,839,886 citing papers with full metadata |
 | fetch_citing_metadata | **~5 sec** | per-paper xlsx, reads locally |
 
-*Machine: external spinning HDD, macOS, 6 parallel workers (`N_WORKERS = 6`).*
-
-Adjust `N_WORKERS` in each script based on your disk type:
-
-| Disk type | Recommended `N_WORKERS` |
-|---|---|
-| Spinning HDD (USB) | 2–3 |
-| SSD (Thunderbolt) | 6–8 |
+*Machine: external HDD over USB, mac Mini.*
 
 ---
 
@@ -178,9 +164,7 @@ Adjust `N_WORKERS` in each script based on your disk type:
 
 | Issue | Cause | Affected papers |
 |---|---|---|
-| Undercounted citations for classic papers | JSTOR DOIs (`10.2307/`) pre-date digital reference linking; authors cite by journal/volume/page, not DOI | Pre-1995 highly-cited works |
-| Undercounted citations for recent papers | OpenAlex snapshot lags ~weeks behind live databases | 2020–2024 papers (~49% gap vs WoS) |
-| Title+year false positives | Two different papers share an identical normalized title and year | Rare; mitigated by 5-word minimum and ambiguity removal |
+| Potentially undercounted citations for recent papers | OpenAlex snapshot lags ~weeks behind live databases | 2020–2024 papers |
 
 ---
 

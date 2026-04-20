@@ -25,7 +25,7 @@ INPUT_FILE = Path("data/raw/sample_input.csv")    # ← change to your file
 WORKS_DIR  = Path("/path/to/openalex/data/works") # ← path to OpenAlex snapshot
 OUT_DIR    = Path("data/processed")
 OUT_FILE   = OUT_DIR / "matched_works.jsonl"
-N_WORKERS  = 6    # reduce to 2-3 for spinning HDDs; 6-8 for SSDs
+N_WORKERS  = 6
 
 # ── Worker globals ────────────────────────────────────────────────────────────
 
@@ -134,7 +134,7 @@ def scan_file(gz_path):
                     results.append({
                         "id":               w["id"],
                         "doi":              oa_doi or _TITLE_YEAR_MAP[key],
-                        "wos_doi":          _TITLE_YEAR_MAP[key],
+                        "input_doi":        _TITLE_YEAR_MAP[key],
                         "match_method":     "title_year",
                         "title":            w.get("display_name"),
                         "year":             yr,

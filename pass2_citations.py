@@ -18,7 +18,7 @@ WORKS_DIR    = Path("/path/to/openalex/data/works")  # ← set to your snapshot 
 OUT_DIR      = Path("data/processed")
 MATCHED_FILE = OUT_DIR / "matched_works.jsonl"
 OUT_FILE     = OUT_DIR / "citing_works.jsonl"
-N_WORKERS    = 6   # reduce to 2-3 for spinning HDDs; 6-8 for SSDs
+N_WORKERS    = 6
 
 # ── Worker globals ────────────────────────────────────────────────────────────
 
@@ -76,7 +76,9 @@ def scan_file(gz_path):
             for line in f:
                 if not line or line == b"\n":
                     continue
-                # Bytes-level skip: ~40% of works have no references at all
+                # Bytes-level skip: ~40% of works have no references at all.
+                # Matches OpenAlex's current serialization exactly (no space after colon);
+                # if the snapshot format ever changes this becomes a no-op but stays correct.
                 if b'"referenced_works":[]' in line:
                     continue
                 w     = orjson.loads(line)
@@ -99,12 +101,16 @@ def main():
     print(f"  Writing to {OUT_FILE}\n")
 
     found = 0
+    seen = set()
     with open(OUT_FILE, "wb", buffering=8 * 1024 * 1024) as out, \
          Pool(N_WORKERS, initializer=init_worker, initargs=(our_ids,)) as pool:
         for i, batch in enumerate(
             pool.imap_unordered(scan_file, map(str, files), chunksize=32), 1
         ):
             for r in batch:
+                if r["id"] in seen:
+                    continue
+                seen.add(r["id"])
                 out.write(orjson.dumps(r) + b"\n")
                 found += 1
             if i % 200 == 0:
