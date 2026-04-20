@@ -136,7 +136,6 @@ OpenAlex internally resolves all references to their Work IDs. Finding citations
 ├── pass1_match.py               # Step 2 — match papers to OpenAlex
 ├── pass2_citations.py           # Step 3 — find citing papers + full metadata
 ├── fetch_citing_metadata.py     # Step 4 — export xlsx for a specific paper
-├── validate_citation_counts.py  # Optional — compare against known citation counts
 ├── data/
 │   ├── raw/
 │   │   └── sample_input.csv     # Example input format
